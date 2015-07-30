@@ -23,5 +23,6 @@
  */
 if ($ADMIN->fulltree) {
     $settings->add(new admin_setting_configtext('quiz_randomsummary/showstudentresponse',
-        get_string('showstudentresponse', 'quiz_randomsummary'), get_string('showstudentresponse_desc', 'quiz_randomsummary'), '', PARAM_SEQUENCE));
+        get_string('showstudentresponse', 'quiz_randomsummary'),
+        get_string('showstudentresponse_desc', 'quiz_randomsummary'), '', PARAM_SEQUENCE));
 }

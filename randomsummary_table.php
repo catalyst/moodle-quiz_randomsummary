@@ -36,8 +36,6 @@ require_once($CFG->dirroot . '/mod/quiz/report/attemptsreport_table.php');
  */
 class quiz_randomsummary_table extends quiz_attempts_report_table {
 
-    protected $regradedqs = array();
-
     /**
      * Constructor
      * @param object $quiz
@@ -100,11 +98,11 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         $averagerow = array(
             $namekey    => $label,
             'sumgrades' => $this->format_average($record),
-            'feedbacktext'=> strip_tags(quiz_report_feedback_for_grade(
+            'feedbacktext' => strip_tags(quiz_report_feedback_for_grade(
                                         $record->grade, $this->quiz->id, $this->context))
         );
 
-        // Now calculate average duration
+        // Now calculate average duration.
         $record = $DB->get_record_sql("
                 SELECT AVG(quiza.timefinish - quiza.timestart) as duration
                   FROM $from
@@ -135,7 +133,7 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
                     $staterow['qsgrade' . $attempt->questionid] = $attempt->$state;
                 }
             }
-            // If there is summary to display,
+            // If there is summary to display.
             if (!empty($staterow)) {
                 if ($state == 'all') {
                     $staterow[$namekey] = get_string('questionfreq', 'quiz_randomsummary');
@@ -148,7 +146,7 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
 
         $this->add_separator();
 
-        // Add Total Attempts
+        // Add Total Attempts.
         $record = $DB->get_record_sql("
                 SELECT count(*) as numberattempts
                   FROM $from
@@ -170,7 +168,7 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
             $this->add_data_keyed($row);
         }
 
-        // Add average attempts
+        // Add average attempts.
         $record = $DB->get_record_sql("
                 SELECT AVG(attempts.numatttempts) as avgattempts FROM
                   (SELECT quiza.userid, count(*) as numatttempts
@@ -218,6 +216,7 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
     /**
      * Format an entry in an average row.
      * @param object $record with fields grade and numaveraged
+     * @param object $question
      */
     protected function format_average($record, $question = false) {
         if (is_null($record->grade)) {
@@ -241,10 +240,6 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         }
     }
 
-    protected function submit_buttons() {
-        parent::submit_buttons();
-    }
-
     public function col_sumgrades($attempt) {
         if ($attempt->state != quiz_attempt::FINISHED) {
             return '-';
@@ -255,33 +250,14 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
             return $grade;
         }
 
-        if (isset($this->regradedqs[$attempt->usageid])) {
-            $newsumgrade = 0;
-            $oldsumgrade = 0;
-            foreach ($this->questions as $question) {
-                if (isset($this->regradedqs[$attempt->usageid][$question->slot])) {
-                    $newsumgrade += $this->regradedqs[$attempt->usageid]
-                            [$question->slot]->newfraction * $question->maxmark;
-                    $oldsumgrade += $this->regradedqs[$attempt->usageid]
-                            [$question->slot]->oldfraction * $question->maxmark;
-                } else {
-                    $newsumgrade += $this->lateststeps[$attempt->usageid]
-                            [$question->slot]->fraction * $question->maxmark;
-                    $oldsumgrade += $this->lateststeps[$attempt->usageid]
-                            [$question->slot]->fraction * $question->maxmark;
-                }
-            }
-            $newsumgrade = quiz_rescale_grade($newsumgrade, $this->quiz);
-            $oldsumgrade = quiz_rescale_grade($oldsumgrade, $this->quiz);
-            $grade = html_writer::tag('del', $oldsumgrade) . '/' .
-                    html_writer::empty_tag('br') . $newsumgrade;
-        }
         return html_writer::link(new moodle_url('/mod/quiz/review.php',
                 array('attempt' => $attempt->attempt)), $grade,
                 array('title' => get_string('reviewattempt', 'quiz')));
     }
 
     /**
+     * Prints extra data in table like stats.
+     *
      * @param string $colname the name of the column.
      * @param object $attempt the row of data - see the SQL in display() in
      * mod/quiz/report/randomsummary/report.php to see what fields are present,
@@ -329,7 +305,7 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
     }
 
     protected function requires_latest_steps_loaded() {
-        return $this->options->slotmarks;
+        return true;
     }
 
     protected function is_latest_step_column($column) {
@@ -341,11 +317,6 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
 
     protected function get_required_latest_state_fields($slot, $alias) {
         return "$alias.fraction * $alias.maxmark AS qsgrade$slot";
-    }
-
-    public function query_db($pagesize, $useinitialsbar = true) {
-        parent::query_db($pagesize, $useinitialsbar);
-
     }
 
     /**

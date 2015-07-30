@@ -38,9 +38,15 @@ require_once($CFG->dirroot . '/mod/quiz/report/randomsummary/randomsummary_table
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class quiz_randomsummary_report extends quiz_attempts_report {
-
+    /**
+     * Display the random summary form.
+     * @param stdClass $quiz record from quiz table.
+     * @param stdClass $cm course module.
+     * @param stdClass $course course record.
+     * @return prints string
+     */
     public function display($quiz, $cm, $course) {
-        global $CFG, $DB, $OUTPUT, $PAGE;
+        global $DB, $OUTPUT;
 
         list($currentgroup, $students, $groupstudents, $allowed) =
                 $this->init('randomsummary', 'quiz_randomsummary_settings_form', $quiz, $cm, $course);
@@ -148,13 +154,6 @@ class quiz_randomsummary_report extends quiz_attempts_report {
                                   FROM {quiz_overview_regrades} qqr
                                  WHERE qqr.questionusageid = quiza.uniqueid
                           ), -1) AS regraded";
-            if ($options->onlyregraded) {
-                $where .= " AND COALESCE((
-                                    SELECT MAX(qqr.regraded)
-                                      FROM {quiz_overview_regrades} qqr
-                                     WHERE qqr.questionusageid = quiza.uniqueid
-                                ), -1) <> -1";
-            }
             $table->set_sql($fields, $from, $where, $params);
 
             if (!$table->is_downloading()) {
@@ -180,19 +179,17 @@ class quiz_randomsummary_report extends quiz_attempts_report {
 
             $this->add_grade_columns($quiz, $options->usercanseegrades, $columns, $headers, false);
 
-            if ($options->slotmarks) {
-                foreach ($questions as $slot => $question) {
-                    // Ignore questions of zero length.
-                    $columns[] = 'qsgrade' . $slot;
-                    $header = get_string('qbrief', 'quiz', $question->slot);
-                    if (!$table->is_downloading()) {
-                        $header .= '<br />';
-                    } else {
-                        $header .= ' ';
-                    }
-                    $header .= '/' . $question->name;
-                    $headers[] = $header;
+            foreach ($questions as $slot => $question) {
+                // Ignore questions of zero length.
+                $columns[] = 'qsgrade' . $slot;
+                $header = get_string('qbrief', 'quiz', $question->slot);
+                if (!$table->is_downloading()) {
+                    $header .= '<br />';
+                } else {
+                    $header .= ' ';
                 }
+                $header .= '/' . $question->name;
+                $headers[] = $header;
             }
 
             // Check to see if we need to add columns for the student responses.
@@ -203,7 +200,7 @@ class quiz_randomsummary_report extends quiz_attempts_report {
                 list($sql, $params) = $DB->get_in_or_equal($responsecolumns, SQL_PARAMS_NAMED);
                 $params['quizid'] = $quiz->id;
 
-                $responseqs =  $DB->get_records_sql("
+                $responseqs = $DB->get_records_sql("
                     SELECT slot.slot, q.name
                       FROM mdl_question q
                       JOIN {quiz_slots} slot ON slot.questionid = q.id
@@ -265,7 +262,6 @@ class quiz_randomsummary_report extends quiz_attempts_report {
      * @param object $cm the cm object for the quiz.
      */
     protected function start_regrade($quiz, $cm) {
-        global $OUTPUT, $PAGE;
         require_capability('mod/quiz:regrade', $this->context);
         $this->print_header_and_tabs($cm, $this->course, $quiz, $this->mode);
     }
@@ -276,7 +272,7 @@ class quiz_randomsummary_report extends quiz_attempts_report {
      * @uses exit. This method never returns.
      */
     protected function finish_regrade($nexturl) {
-        global $OUTPUT, $PAGE;
+        global $OUTPUT;
         echo $OUTPUT->heading(get_string('regradecomplete', 'quiz_overview'), 3);
         echo $OUTPUT->continue_button($nexturl);
         echo $OUTPUT->footer();
@@ -530,8 +526,6 @@ class quiz_randomsummary_report extends quiz_attempts_report {
      * Update the final grades for all attempts. This method is used following
      * a regrade.
      * @param object $quiz the quiz settings.
-     * @param array $userids only update scores for these userids.
-     * @param array $attemptids attemptids only update scores for these attempt ids.
      */
     protected function update_overall_grades($quiz) {
         quiz_update_all_attempt_sumgrades($quiz);
