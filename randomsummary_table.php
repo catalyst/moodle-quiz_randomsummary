@@ -218,6 +218,15 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
      * @return string the contents of the cell.
      */
     public function other_cols($colname, $attempt) {
+        // If this is trying to display the student response to a question, pull it out.
+        if (preg_match('/^qsresponse(\d+)$/', $colname, $matches)) {
+            if (isset($this->lateststeps[$attempt->usageid][$matches[1]])) {
+                return $this->lateststeps[$attempt->usageid][$matches[1]]->responsesummary;
+            }
+            return '';
+        }
+
+        // The only other column supported here is the grade, return null if for something else.
         if (!preg_match('/^qsgrade(\d+)$/', $colname, $matches)) {
             return null;
         }
@@ -230,7 +239,7 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
             return '-';
         }
         if ($this->lateststeps[$attempt->usageid][$slot]->questionid <> $questionid) {
-            return 'N/A'; // This random question wasn't answer by this user.
+            return get_string('notanswered', 'quiz_randomsummary'); // This random question wasn't answer by this user.
         }
 
         if ($this->is_downloading()) {
@@ -327,6 +336,15 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         $slots = array();
         foreach ($this->questions as $question) {
             $slots[] = $question->slot;
+        }
+
+        // Check to see if we need to pull in any other slots/questions - used to display the student response to certain questions.
+        $responsecolumnconfig = get_config('quiz_randomsummary', 'showstudentresponse');
+        if (!empty($responsecolumnconfig)) {
+            $responsecolumns = explode(',', $responsecolumnconfig);
+            foreach ($responsecolumns as $rc) {
+                $slots[] = $rc;
+            }
         }
 
         $latesstepdata = $dm->load_questions_usages_latest_steps(

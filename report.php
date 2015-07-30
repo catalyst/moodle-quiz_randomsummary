@@ -195,6 +195,31 @@ class quiz_randomsummary_report extends quiz_attempts_report {
                 }
             }
 
+            // Check to see if we need to add columns for the student responses.
+            $responsecolumnconfig = get_config('quiz_randomsummary', 'showstudentresponse');
+            if (!empty($responsecolumnconfig)) {
+                $responsecolumns = array_filter(explode(',', $responsecolumnconfig));
+                // Get the question names for these columns to display in the header.
+                list($sql, $params) = $DB->get_in_or_equal($responsecolumns, SQL_PARAMS_NAMED);
+                $params['quizid'] = $quiz->id;
+
+                $responseqs =  $DB->get_records_sql("
+                    SELECT slot.slot, q.name
+                      FROM mdl_question q
+                      JOIN {quiz_slots} slot ON slot.questionid = q.id
+                    WHERE slot.quizid = :quizid AND q.length > 0
+                      AND slot.slot ".$sql." ORDER BY slot.slot", $params);
+
+                foreach ($responseqs as $rq) {
+                    $columns[] = 'qsresponse'.$rq->slot;
+                    if (!empty($rq->name)) {
+                        $headers[] = format_string($rq->name);
+                    } else {
+                        $headers[] = '';
+                    }
+                }
+            }
+
             $this->set_up_table_columns($table, $columns, $headers, $this->get_base_url(), $options, false);
             $table->set_attribute('class', 'generaltable generalbox grades');
 
