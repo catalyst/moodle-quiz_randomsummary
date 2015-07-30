@@ -104,22 +104,85 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
                                         $record->grade, $this->quiz->id, $this->context))
         );
 
+        // Now calculate average duration
+        $record = $DB->get_record_sql("
+                SELECT AVG(quiza.timefinish - quiza.timestart) as duration
+                  FROM $from
+                 WHERE $where", $params);
+        if (!empty($record->duration)) {
+            $averagerow['duration'] = format_time($record->duration);
+        }
 
+        // Average grades row.
+        $this->add_data_keyed($averagerow);
+
+        // Get statistics on question usage.
         $dm = new quiz_randomsummary_question_engine_data_mapper();
         $qubaids = new qubaid_join($from, 'quiza.uniqueid', $where, $params);
         $slots = array();
-        print_object($this->questions);
+
         foreach ($this->questions as $qa) {
             $slots[] = $qa->slot;
         }
         $attempts = $dm->load_questions_usages_question_state_summary($qubaids, $slots);
+        // I don't like this array hard-coded here, seems fragile.
+        // There is probably a better way to translate this using internal functions.
+        $states = array('gradedright', 'gradedpartial', 'gradedwrong', 'all');
+        foreach ($states as $state) {
+            $staterow = array();
+            foreach ($attempts as $attempt) {
+                if (!empty($attempt->$state)) {
+                    $staterow['qsgrade' . $attempt->questionid] = $attempt->$state;
+                }
+            }
+            // If there is summary to display,
+            if (!empty($staterow)) {
+                if ($state == 'all') {
+                    $staterow[$namekey] = get_string('questionfreq', 'quiz_randomsummary');
+                } else {
+                    $staterow[$namekey] = get_string($state, 'quiz_randomsummary');
+                }
+                $this->add_data_keyed($staterow);
+            }
+        }
 
-        $avggradebyq = $dm->load_average_marks($qubaids, array_keys($this->questions));
+        $this->add_separator();
 
+        // Add Total Attempts
+        $record = $DB->get_record_sql("
+                SELECT count(*) as numberattempts
+                  FROM $from
+                 WHERE $where", $params);
+        if (!empty($record->numberattempts)) {
+            $row = array($namekey => get_string('totalattempts', 'quiz_randomsummary'),
+                'state' => $record->numberattempts);
+            $this->add_data_keyed($row);
+        }
 
-        $averagerow += $this->format_average_grade_for_questions($avggradebyq);
+        // Add Total users.
+        $record = $DB->get_record_sql("
+                SELECT count(DISTINCT quiza.userid) as numberusers
+                  FROM $from
+                 WHERE $where", $params);
+        if (!empty($record->numberusers)) {
+            $row = array($namekey => get_string('totalusers', 'quiz_randomsummary'),
+                'state' => $record->numberusers);
+            $this->add_data_keyed($row);
+        }
 
-        $this->add_data_keyed($averagerow);
+        // Add average attempts
+        $record = $DB->get_record_sql("
+                SELECT AVG(attempts.numatttempts) as avgattempts FROM
+                  (SELECT quiza.userid, count(*) as numatttempts
+                     FROM $from
+                    WHERE $where
+                    GROUP BY quiza.userid) attempts", $params);
+        if (!empty($record->avgattempts)) {
+            $row = array($namekey => get_string('averageattempts', 'quiz_randomsummary'),
+                'state' => round($record->avgattempts, 2));
+            $this->add_data_keyed($row);
+        }
+
     }
 
     /**

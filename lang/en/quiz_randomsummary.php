@@ -61,3 +61,10 @@ $string['showstudentresponse'] = 'Show student response to question';
 $string['showstudentresponse_desc'] = 'This setting allows the student response to particular questions to be added to the end of the report. Allows for a comma-seperated list using the natural number of the question.
 For example if you want the response to the 4th question answered by the student added to the end of this report, enter the value 4 into this field.';
 $string['notanswered'] = 'n/a';
+$string['questionfreq'] = 'Question frequency';
+$string['gradedright'] = 'Number correct';
+$string['gradedpartial'] = 'Number partially correct';
+$string['gradedwrong'] = 'Number incorrect';
+$string['totalattempts'] = 'Total attempts';
+$string['totalusers'] = 'Total users';
+$string['averageattempts'] = 'Average number of attempts';
