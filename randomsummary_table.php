@@ -105,9 +105,17 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         );
 
 
-        $dm = new question_engine_data_mapper();
+        $dm = new quiz_randomsummary_question_engine_data_mapper();
         $qubaids = new qubaid_join($from, 'quiza.uniqueid', $where, $params);
+        $slots = array();
+        print_object($this->questions);
+        foreach ($this->questions as $qa) {
+            $slots[] = $qa->slot;
+        }
+        $attempts = $dm->load_questions_usages_question_state_summary($qubaids, $slots);
+
         $avggradebyq = $dm->load_average_marks($qubaids, array_keys($this->questions));
+
 
         $averagerow += $this->format_average_grade_for_questions($avggradebyq);
 
@@ -356,5 +364,73 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         }
 
         return $lateststeps;
+    }
+}
+
+
+class quiz_randomsummary_question_engine_data_mapper extends question_engine_data_mapper {
+    /**
+     * Modified version of load_questions_usages_question_state_summary() to obtain summary of responses to questions.
+     *
+     * This method may be called publicly.
+     *
+     * @param qubaid_condition $qubaids used to restrict which usages are included
+     * in the query. See {@link qubaid_condition}.
+     * @param array $slots A list of slots for the questions you want to konw about.
+     * @return array The array keys are slot,qestionid. The values are objects with
+     * fields $slot, $questionid, $inprogress, $name, $needsgrading, $autograded,
+     * $manuallygraded and $all.
+     */
+    public function load_questions_usages_question_state_summary(
+        qubaid_condition $qubaids, $slots) {
+        list($slottest, $params) = $this->db->get_in_or_equal($slots, SQL_PARAMS_NAMED, 'slot');
+
+        $rs = $this->db->get_recordset_sql("
+          SELECT qa.slot,
+               qa.questionid,
+               q.name,
+               qas.state,
+               COUNT(1) AS numstate
+
+           FROM {$qubaids->from_question_attempts('qa')}
+           JOIN {question_attempt_steps} qas ON qas.questionattemptid = qa.id
+               AND qas.sequencenumber = {$this->latest_step_for_qa_subquery()}
+           JOIN {question} q ON q.id = qa.questionid
+
+          WHERE {$qubaids->where()} AND qa.slot $slottest
+
+          GROUP BY
+            qa.slot,
+            qa.questionid,
+            q.name,
+            q.id,
+            qas.state
+
+          ORDER BY
+           qa.slot,
+           qa.questionid,
+           q.name,
+           q.id
+           ", $params + $qubaids->from_where_params());
+
+        $results = array();
+        foreach ($rs as $row) {
+            $index = $row->slot . ',' . $row->questionid;
+
+            if (!array_key_exists($index, $results)) {
+                $res = new stdClass();
+                $res->slot = $row->slot;
+                $res->questionid = $row->questionid;
+                $res->name = $row->name;
+                $res->all = 0;
+                $results[$index] = $res;
+            }
+            $results[$index]->{$row->state} = $row->numstate;
+
+            $results[$index]->all += $row->numstate;
+        }
+        $rs->close();
+
+        return $results;
     }
 }
