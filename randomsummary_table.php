@@ -146,11 +146,11 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
 
         $this->add_separator();
 
-        // Add Total Attempts.
+        // Add Total Attempts. (Only get non-empty quiza.preview states.)
         $record = $DB->get_record_sql("
                 SELECT count(*) as numberattempts
                   FROM $from
-                 WHERE $where", $params);
+                 WHERE quiza.preview is NOT NULL AND $where", $params);
         if (!empty($record->numberattempts)) {
             $row = array($namekey => get_string('totalattempts', 'quiz_randomsummary'),
                 'state' => $record->numberattempts);
