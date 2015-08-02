@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Quiz overview report version information.
+ * Quiz randomsummary report version information.
  *
  * @package   quiz_randomsummary
  * @copyright 2015 Dan Marsden http://danmarsden.com
