@@ -1,6 +1,7 @@
 Random question summary.
 
 Author: Dan Marsden <dan@danmarsden.com>
+Initial development funded by Waitemata District Health Board http://www.waitematadhb.govt.nz/
 
 This report allows for the analysis of random questions within a Quiz.
 
