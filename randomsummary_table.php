@@ -122,6 +122,10 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         foreach ($this->questions as $qa) {
             $slots[] = $qa->slot;
         }
+        // No Random questions found.
+        if (empty($slots)) {
+            return;
+        }
         $attempts = $dm->load_questions_usages_question_state_summary($qubaids, $slots);
         // I don't like this array hard-coded here, seems fragile.
         // There is probably a better way to translate this using internal functions.
@@ -387,6 +391,10 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
             foreach ($responsecolumns as $rc) {
                 $slots[] = $rc;
             }
+        }
+        if (empty($slots)) {
+            // No Random Questions found.
+            return array();
         }
 
         $latesstepdata = $dm->load_questions_usages_latest_steps(
