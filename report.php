@@ -70,20 +70,27 @@ class quiz_randomsummary_report extends quiz_attempts_report {
 
         // Load the required questions.
         // First get all Random questions within this quiz.
-
-        $questions = $DB->get_records_sql("
-            SELECT q2.id as id, q.id as qid, slot.slot, q2.length, slot.maxmark, q2.name
+        $idfield = $DB->sql_concat('q2.id', 'slot.slot');
+        $questionsraw = $DB->get_records_sql("
+            SELECT $idfield as id, q2.id as q2id, q.id as qid, slot.slot, q2.length, slot.maxmark, q2.name
               FROM {question} q
               JOIN {quiz_slots} slot ON slot.questionid = q.id
               JOIN {question} q2 on q.category = q2.category
              WHERE slot.quizid = ?
                AND q.length > 0
                AND q.qtype = 'random'
-               AND q2.qtype <> 'random'", array($quiz->id));
+               AND q2.qtype <> 'random'
+          ORDER BY slot.slot", array($quiz->id));
         $number = 1;
-        foreach ($questions as $question) {
-            $question->number = $number;
-            $number += $question->length;
+        $questions = array();
+        foreach ($questionsraw as $question) {
+            if (!isset($questions[$question->q2id])) {
+                $questions[$question->q2id] = $question;
+                $questions[$question->q2id]->slots = array();
+            }
+            $questions[$question->q2id]->slots[] = $question->slot;
+            $questions[$question->q2id]->number = $number;
+            $number += $questions[$question->q2id]->length;
         }
 
         // Prepare for downloading, if applicable.
@@ -181,7 +188,7 @@ class quiz_randomsummary_report extends quiz_attempts_report {
             foreach ($questions as $slot => $question) {
                 // Ignore questions of zero length.
                 $columns[] = 'qsgrade' . $slot;
-                $header = get_string('qbrief', 'quiz', $question->slot);
+                $header = get_string('qbrief', 'quiz', implode($question->slots, ', '));
                 if (!$table->is_downloading()) {
                     $header .= '<br />';
                 } else {
