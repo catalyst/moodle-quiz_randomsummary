@@ -36,9 +36,17 @@ require_once($CFG->dirroot . '/mod/quiz/report/attemptsreport_form.php');
  */
 class quiz_randomsummary_settings_form extends mod_quiz_attempts_report_form {
 
+    /**
+     * Allows the randomsummary report to add extra fields to the attempts area of the form.
+     * @param MoodleQuickForm $mform
+     */
     protected function other_attempt_fields(MoodleQuickForm $mform) {
     }
 
+    /**
+     * Allows the randomsummary report to add extra fields to the preferences area of the form,
+     * @param MoodleQuickForm $mform
+     */
     protected function other_preference_fields(MoodleQuickForm $mform) {
     }
 }

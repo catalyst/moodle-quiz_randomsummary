@@ -53,6 +53,14 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
                 $qmsubselect, $options, $groupstudents, $students, $questions, $reporturl);
     }
 
+    /**
+     * Take the data returned from the db_query and go through all the rows
+     * processing each col using either col_{columnname} method or other_cols
+     * method or if other_cols returns NULL then put the data straight into the
+     * table.
+     *
+     * @return void
+     */
     public function build_table() {
         global $DB;
 
@@ -244,6 +252,11 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         }
     }
 
+    /**
+     * Return the column with the sumgrades field.
+     * @param stdClass $attempt
+     * @return string
+     */
     public function col_sumgrades($attempt) {
         if ($attempt->state != quiz_attempt::FINISHED) {
             return '-';
@@ -308,10 +321,21 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         return $this->make_review_link('', $attempt, $slot);
     }
 
+    /**
+     * This report requires the detailed information for each question from the
+     * question_attempts_steps table.
+     * @return bool should {@link load_extra_data} call {@link load_question_latest_steps}?
+     */
     protected function requires_latest_steps_loaded() {
         return true;
     }
 
+    /**
+     * Is this a column that depends on joining to the latest state information?
+     * If so, return the corresponding slot. If not, return false.
+     * @param string $column a column name
+     * @return int false if no, else a slot.
+     */
     protected function is_latest_step_column($column) {
         if (preg_match('/^qsgrade([0-9]+)/', $column, $matches)) {
             return $matches[1];
@@ -319,6 +343,11 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         return false;
     }
 
+    /**
+     * Get any fields that might be needed when sorting on date for a particular slot.
+     * @param int $slot the slot for the column we want.
+     * @param string $alias the table alias for latest state information relating to that slot.
+     */
     protected function get_required_latest_state_fields($slot, $alias) {
         return "$alias.fraction * $alias.maxmark AS qsgrade$slot";
     }
@@ -369,7 +398,7 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
      *
      * The results are returned as an two dimensional array $qubaid => $slot => $dataobject
      *
-     * @param qubaid_condition|null $qubaids used to restrict which usages are included
+     * @param qubaid_condition $qubaids used to restrict which usages are included
      * in the query. See {@link qubaid_condition}.
      * @return array of records. See the SQL in this function to see the fields available.
      */
@@ -409,7 +438,15 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
     }
 }
 
-
+/**
+ *
+ */
+/**
+ * Modified version of load_questions_usages_question_state_summary() to obtain summary of responses to questions.
+ *
+ * @copyright 2015 Dan Marsden http://danmarsden.com
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 class quiz_randomsummary_question_engine_data_mapper extends question_engine_data_mapper {
     /**
      * Modified version of load_questions_usages_question_state_summary() to obtain summary of responses to questions.
