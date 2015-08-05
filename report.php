@@ -73,14 +73,13 @@ class quiz_randomsummary_report extends quiz_attempts_report {
 
         $questions = $DB->get_records_sql("
             SELECT q2.id as id, q.id as qid, slot.slot, q2.length, slot.maxmark, q2.name
-              FROM mdl_question q
+              FROM {question} q
               JOIN {quiz_slots} slot ON slot.questionid = q.id
               JOIN {question} q2 on q.category = q2.category
              WHERE slot.quizid = ?
                AND q.length > 0
                AND q.qtype = 'random'
                AND q2.qtype <> 'random'", array($quiz->id));
-
         $number = 1;
         foreach ($questions as $question) {
             $question->number = $number;
@@ -202,7 +201,7 @@ class quiz_randomsummary_report extends quiz_attempts_report {
 
                 $responseqs = $DB->get_records_sql("
                     SELECT slot.slot, q.name
-                      FROM mdl_question q
+                      FROM {question} q
                       JOIN {quiz_slots} slot ON slot.questionid = q.id
                     WHERE slot.quizid = :quizid AND q.length > 0
                       AND slot.slot ".$sql." ORDER BY slot.slot", $params);
