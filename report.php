@@ -231,23 +231,4 @@ class quiz_randomsummary_report extends quiz_attempts_report {
 
         return true;
     }
-
-    /**
-     * Unlock the session and allow the regrading process to run in the background.
-     */
-    protected function unlock_session() {
-        \core\session\manager::write_close();
-        ignore_user_abort(true);
-    }
-
-    /**
-     * Update the final grades for all attempts. This method is used following
-     * a regrade.
-     * @param object $quiz the quiz settings.
-     */
-    protected function update_overall_grades($quiz) {
-        quiz_update_all_attempt_sumgrades($quiz);
-        quiz_update_all_final_grades($quiz);
-        quiz_update_grades($quiz);
-    }
 }
