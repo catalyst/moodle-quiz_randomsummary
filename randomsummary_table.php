@@ -26,6 +26,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->dirroot . '/mod/quiz/report/attemptsreport_table.php');
+require_once($CFG->libdir . '/gradelib.php');
 
 
 /**
@@ -159,40 +160,82 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         $this->add_separator();
 
         // Add Total Attempts. (Only get non-empty quiza.preview states.)
-        $record = $DB->get_record_sql("
-                SELECT count(*) as numberattempts
+        $value = $DB->get_field_sql("
+                SELECT count(*)
                   FROM $from
                  WHERE quiza.preview is NOT NULL AND $where", $params);
-        if (!empty($record->numberattempts)) {
+        if (!empty($value)) {
             $row = array($namekey => get_string('totalattempts', 'quiz_randomsummary'),
-                'state' => $record->numberattempts);
+                'state' => $value);
             $this->add_data_keyed($row);
         }
 
         // Add Total users.
-        $record = $DB->get_record_sql("
-                SELECT count(DISTINCT quiza.userid) as numberusers
+        $value = $DB->get_field_sql("
+                SELECT count(DISTINCT quiza.userid)
                   FROM $from
                  WHERE $where", $params);
-        if (!empty($record->numberusers)) {
+        if (!empty($value)) {
             $row = array($namekey => get_string('totalusers', 'quiz_randomsummary'),
-                'state' => $record->numberusers);
+                'state' => $value);
             $this->add_data_keyed($row);
         }
 
         // Add average attempts.
-        $record = $DB->get_record_sql("
-                SELECT AVG(attempts.numatttempts) as avgattempts FROM
+        $value = $DB->get_field_sql("
+                SELECT AVG(attempts.numatttempts) FROM
                   (SELECT quiza.userid, count(*) as numatttempts
                      FROM $from
                     WHERE $where
                     GROUP BY quiza.userid) attempts", $params);
-        if (!empty($record->avgattempts)) {
+        if (!empty($value)) {
             $row = array($namekey => get_string('averageattempts', 'quiz_randomsummary'),
-                'state' => round($record->avgattempts, 2));
+                'state' => round($value, 2));
             $this->add_data_keyed($row);
         }
+        // Check to see if a passing grade is set and if so display stats on pass/fail.
+        $item = grade_item::fetch(array('courseid' => $this->quiz->course, 'itemtype' => 'mod',
+            'itemmodule' => 'quiz', 'iteminstance' => $this->quiz->id, 'outcomeid' => null));
+        if (!empty($item->gradepass)) {
+                $params['gradepass'] = $item->gradepass;
 
+                // Add Passed Attempts
+                $numpassed = $DB->get_field_sql("
+                SELECT count(*) as numpassed
+                  FROM $from
+                 WHERE $where AND quiza.sumgrades >= :gradepass", $params);
+                $row = array($namekey => get_string('passedattempts', 'quiz_randomsummary'),
+                           'state' => $numpassed);
+                $this->add_data_keyed($row);
+
+                // Add Failed Attempts
+                $numfailed = $DB->get_field_sql("
+                SELECT count(*)
+                  FROM $from
+                 WHERE $where AND quiza.sumgrades < :gradepass", $params);
+                $row = array($namekey => get_string('failedattempts', 'quiz_randomsummary'),
+                        'state' => $numfailed);
+                $this->add_data_keyed($row);
+
+                // Add passed users.
+                $numpassed = $DB->get_field_sql("
+                SELECT count(DISTINCT u.id)
+                  FROM $from
+                 WHERE $where AND quiza.sumgrades >= :gradepass", $params);
+                $row = array($namekey => get_string('passedusers', 'quiz_randomsummary'),
+                        'state' => $numpassed);
+            $this->add_data_keyed($row);
+
+                // Add failed users.
+                $numfailed = $DB->get_field_sql("
+                SELECT count(DISTINCT u.id)
+                  FROM $from
+                 WHERE $where AND quiza.sumgrades < :gradepass", $params);
+                $row = array($namekey => get_string('failedusers', 'quiz_randomsummary'),
+                        'state' => $numfailed);
+                $this->add_data_keyed($row);
+
+         }
     }
 
     /**
