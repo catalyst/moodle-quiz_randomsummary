@@ -342,10 +342,16 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
 
         $question = $this->questions[$questionid];
         $slot = $question->slot;
-        if (!isset($this->lateststeps[$attempt->usageid][$slot])) {
-            return '-';
+        // Check to see if this question was answered in any slot.
+        $foundquestion = false;
+        foreach ($this->lateststeps[$attempt->usageid] as $sl) {
+            if ($sl->questionid == $questionid) {
+                $foundquestion = true;
+            }
+
         }
-        if ($this->lateststeps[$attempt->usageid][$slot]->questionid <> $questionid) {
+
+        if (!$foundquestion) {
             return get_string('notanswered', 'quiz_randomsummary'); // This random question wasn't answer by this user.
         }
 
