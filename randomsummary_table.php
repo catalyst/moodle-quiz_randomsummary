@@ -63,8 +63,6 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
      * @return void
      */
     public function build_table() {
-        global $DB;
-
         if (!$this->rawdata) {
             return;
         }
@@ -197,45 +195,44 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         $item = grade_item::fetch(array('courseid' => $this->quiz->course, 'itemtype' => 'mod',
             'itemmodule' => 'quiz', 'iteminstance' => $this->quiz->id, 'outcomeid' => null));
         if (!empty($item->gradepass)) {
-                $params['gradepass'] = $item->gradepass;
+            $params['gradepass'] = $item->gradepass;
 
-                // Add Passed Attempts
-                $numpassed = $DB->get_field_sql("
-                SELECT count(*) as numpassed
-                  FROM $from
-                 WHERE $where AND quiza.sumgrades >= :gradepass", $params);
-                $row = array($namekey => get_string('passedattempts', 'quiz_randomsummary'),
-                           'state' => $numpassed);
-                $this->add_data_keyed($row);
-
-                // Add Failed Attempts
-                $numfailed = $DB->get_field_sql("
-                SELECT count(*)
-                  FROM $from
-                 WHERE $where AND quiza.sumgrades < :gradepass", $params);
-                $row = array($namekey => get_string('failedattempts', 'quiz_randomsummary'),
-                        'state' => $numfailed);
-                $this->add_data_keyed($row);
-
-                // Add passed users.
-                $numpassed = $DB->get_field_sql("
-                SELECT count(DISTINCT u.id)
-                  FROM $from
-                 WHERE $where AND quiza.sumgrades >= :gradepass", $params);
-                $row = array($namekey => get_string('passedusers', 'quiz_randomsummary'),
-                        'state' => $numpassed);
+            // Add Passed Attempts.
+            $numpassed = $DB->get_field_sql("
+            SELECT count(*) as numpassed
+              FROM $from
+             WHERE $where AND quiza.sumgrades >= :gradepass", $params);
+            $row = array($namekey => get_string('passedattempts', 'quiz_randomsummary'),
+                       'state' => $numpassed);
             $this->add_data_keyed($row);
 
-                // Add failed users.
-                $numfailed = $DB->get_field_sql("
-                SELECT count(DISTINCT u.id)
-                  FROM $from
-                 WHERE $where AND quiza.sumgrades < :gradepass", $params);
-                $row = array($namekey => get_string('failedusers', 'quiz_randomsummary'),
-                        'state' => $numfailed);
-                $this->add_data_keyed($row);
+            // Add Failed Attempts.
+            $numfailed = $DB->get_field_sql("
+            SELECT count(*)
+              FROM $from
+             WHERE $where AND quiza.sumgrades < :gradepass", $params);
+            $row = array($namekey => get_string('failedattempts', 'quiz_randomsummary'),
+                    'state' => $numfailed);
+            $this->add_data_keyed($row);
 
-         }
+            // Add passed users.
+            $numpassed = $DB->get_field_sql("
+            SELECT count(DISTINCT u.id)
+              FROM $from
+             WHERE $where AND quiza.sumgrades >= :gradepass", $params);
+            $row = array($namekey => get_string('passedusers', 'quiz_randomsummary'),
+                    'state' => $numpassed);
+            $this->add_data_keyed($row);
+
+            // Add failed users.
+            $numfailed = $DB->get_field_sql("
+            SELECT count(DISTINCT u.id)
+              FROM $from
+             WHERE $where AND quiza.sumgrades < :gradepass", $params);
+            $row = array($namekey => get_string('failedusers', 'quiz_randomsummary'),
+                    'state' => $numfailed);
+            $this->add_data_keyed($row);
+        }
     }
 
     /**

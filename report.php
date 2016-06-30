@@ -48,8 +48,8 @@ class quiz_randomsummary_report extends quiz_attempts_report {
     public function display($quiz, $cm, $course) {
         global $DB, $OUTPUT;
 
-        list($currentgroup, $students, $groupstudents, $allowed) =
-                $this->init('randomsummary', 'quiz_randomsummary_settings_form', $quiz, $cm, $course);
+        list($currentgroup, $students, $groupstudents, $allowed)
+            = $this->init('randomsummary', 'quiz_randomsummary_settings_form', $quiz, $cm, $course);
         $options = new quiz_randomsummary_options('randomsummary', $quiz, $cm, $course);
 
         if ($fromform = $this->form->get_data()) {
@@ -115,7 +115,7 @@ class quiz_randomsummary_report extends quiz_attempts_report {
             $this->print_header_and_tabs($cm, $course, $quiz, $this->mode);
         }
 
-        if ($groupmode = groups_get_activity_groupmode($cm)) {
+        if (groups_get_activity_groupmode($cm)) {
             // Groups are being used, so output the group selector if we are not downloading.
             if (!$table->is_downloading()) {
                 groups_print_activity_menu($cm, $options->get_url());

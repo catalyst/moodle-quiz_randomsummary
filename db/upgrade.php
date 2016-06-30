@@ -31,12 +31,5 @@ defined('MOODLE_INTERNAL') || die();
  * @param number $oldversion
  */
 function xmldb_quiz_randomsummary_upgrade($oldversion) {
-    global $CFG, $DB;
-
-    $dbman = $DB->get_manager();
-
-    // Moodle v2.9.0 release upgrade line.
-    // Put any upgrade step following this.
-
     return true;
 }
