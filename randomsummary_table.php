@@ -343,6 +343,7 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         $foundquestion = false;
         foreach ($this->lateststeps[$attempt->usageid] as $sl) {
             if ($sl->questionid == $questionid) {
+                $slot = $sl->slot;
                 $foundquestion = true;
             }
 
