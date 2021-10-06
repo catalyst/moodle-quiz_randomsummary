@@ -52,9 +52,6 @@ $string['showinggraded'] = 'Showing only the attempt graded for each user.';
 $string['showinggradedandungraded'] = 'Showing graded and ungraded attempts for each user. The one attempt for each user that is graded is highlighted. The grading method for this quiz is {$a}.';
 $string['studentingroup'] = '\'{$a->coursestudent}\' in group \'{$a->groupname}\'';
 $string['studentingrouplong'] = '\'{$a->coursestudent}\' in this group';
-$string['showstudentresponse'] = 'Show student response to question';
-$string['showstudentresponse_desc'] = 'This setting allows the student response to particular questions to be added to the end of the report. Allows for a comma-seperated list using the natural number of the question.
-For example if you want the response to the 4th question answered by the student added to the end of this report, enter the value 4 into this field.';
 $string['notanswered'] = 'n/a';
 $string['questionfreq'] = 'Question frequency';
 $string['gradedright'] = 'Number correct';

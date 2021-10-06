@@ -22,12 +22,23 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+namespace quiz_randomsummary;
 
 defined('MOODLE_INTERNAL') || die();
 
-require_once($CFG->dirroot . '/mod/quiz/report/attemptsreport_table.php');
 require_once($CFG->libdir . '/gradelib.php');
+require_once($CFG->libdir . '/mathslib.php');
 
+use grade_item;
+use html_writer;
+use mod_quiz\local\reports\attempts_report_table;
+use mod_quiz\quiz_attempt;
+use moodle_url;
+use qubaid_condition;
+use qubaid_join;
+use question_engine_data_mapper;
+use question_state;
+use quiz_randomsummary\quiz_randomsummary_options;
 
 /**
  * This is a table subclass for displaying the quiz grades report.
@@ -35,7 +46,13 @@ require_once($CFG->libdir . '/gradelib.php');
  * @copyright 2008 Jamie Pratt
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class quiz_randomsummary_table extends quiz_attempts_report_table {
+class quiz_randomsummary_table extends attempts_report_table {
+
+    /** @var array data containing questions grades */
+    protected $datacolumns = [];
+
+    /** @var Array Array of attempts ids in the report. */
+    protected $attemptsids = [];
 
     /**
      * Constructor
@@ -43,15 +60,16 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
      * @param context $context
      * @param string $qmsubselect
      * @param quiz_randomsummary_options $options
-     * @param array $groupstudents
-     * @param array $students
+     * @param \core\dml\sql_join $groupstudentsjoins
+     * @param \core\dml\sql_join $studentsjoins
      * @param array $questions
      * @param moodle_url $reporturl
      */
     public function __construct($quiz, $context, $qmsubselect,
-            quiz_randomsummary_options $options, $groupstudents, $students, $questions, $reporturl) {
+            quiz_randomsummary_options $options, \core\dml\sql_join $groupstudentsjoins,
+            \core\dml\sql_join $studentsjoins, $questions, $reporturl) {
         parent::__construct('mod-quiz-report-randomsummary-report', $quiz , $context,
-                $qmsubselect, $options, $groupstudents, $students, $questions, $reporturl);
+                $qmsubselect, $options, $groupstudentsjoins, $studentsjoins, $questions, $reporturl);
     }
 
     /**
@@ -63,6 +81,7 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
      * @return void
      */
     public function build_table() {
+        global $DB;
         if (!$this->rawdata) {
             return;
         }
@@ -73,12 +92,26 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         // End of adding the data from attempts. Now add averages at bottom.
         $this->add_separator();
 
-        if ($this->groupstudents) {
-            $this->add_average_row(get_string('groupavg', 'grades'), $this->groupstudents);
+        if (!empty($this->groupstudentsjoins->joins)) {
+            $sql = "SELECT DISTINCT u.id
+                      FROM {user} u
+                    {$this->groupstudentsjoins->joins}
+                     WHERE {$this->groupstudentsjoins->wheres}";
+            $groupstudents = $DB->get_records_sql($sql, $this->groupstudentsjoins->params);
+            if ($groupstudents) {
+                $this->add_average_row(get_string('groupavg', 'grades'), $this->groupstudentsjoins);
+            }
         }
 
-        if ($this->students) {
-            $this->add_average_row(get_string('overallaverage', 'grades'), $this->students);
+        if (!empty($this->studentsjoins->joins)) {
+            $sql = "SELECT DISTINCT u.id
+                      FROM {user} u
+                    {$this->studentsjoins->joins}
+                     WHERE {$this->studentsjoins->wheres}";
+            $students = $DB->get_records_sql($sql, $this->studentsjoins->params);
+            if ($students) {
+                $this->add_average_row(get_string('overallaverage', 'grades'), $this->studentsjoins);
+            }
         }
     }
 
@@ -117,18 +150,21 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         if (!empty($record->duration)) {
             $averagerow['duration'] = format_time($record->duration);
         }
-
-        // Average grades row.
-        $this->add_data_keyed($averagerow);
-
-        // Get statistics on question usage.
-        $dm = new quiz_randomsummary_question_engine_data_mapper();
-        $qubaids = new qubaid_join($from, 'quiza.uniqueid', $where, $params);
         $slots = array();
 
         foreach ($this->questions as $qa) {
             $slots[] = $qa->slot;
         }
+        // Add grade average for questions.
+        $dm = new quiz_randomsummary_question_engine_data_mapper();
+        $qubaids = new qubaid_join($from, 'quiza.uniqueid', $where, $params);
+        $avggradebyq = $dm->load_questions_average_marks($qubaids);
+        $averagerow += $this->format_average_grade_for_questions($avggradebyq);
+
+        // Average grades row.
+        $this->add_data_keyed($averagerow);
+
+        // Get statistics on question usage.
         // No Random questions found.
         if (empty($slots)) {
             return;
@@ -157,7 +193,7 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
 
         $this->add_separator();
 
-        // Add Total Attempts. (Only get non-empty quiza.preview states.)
+        // Add Total Attempts. (Only get non-empty quiza.preview states).
         $value = $DB->get_field_sql("
                 SELECT count(*)
                   FROM $from
@@ -195,13 +231,19 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         $item = grade_item::fetch(array('courseid' => $this->quiz->course, 'itemtype' => 'mod',
             'itemmodule' => 'quiz', 'iteminstance' => $this->quiz->id, 'outcomeid' => null));
         if (!empty($item->gradepass)) {
-            $params['gradepass'] = $item->gradepass;
+            $users = $DB->get_records_sql("
+                SELECT DISTINCT quiza.userid
+                  FROM $from
+                 WHERE $where", $params);
+            $params['gradepass'] = grade_floatval($item->gradepass);
+            $params['qgrade'] = $this->quiz->grade;
+            $params['qsumgrades'] = $this->quiz->sumgrades;
 
             // Add Passed Attempts.
             $numpassed = $DB->get_field_sql("
             SELECT count(*) as numpassed
               FROM $from
-             WHERE $where AND quiza.sumgrades >= :gradepass", $params);
+             WHERE $where AND (quiza.sumgrades * :qgrade / :qsumgrades) >= :gradepass", $params);
             $row = array($namekey => get_string('passedattempts', 'quiz_randomsummary'),
                        'state' => $numpassed);
             $this->add_data_keyed($row);
@@ -210,25 +252,47 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
             $numfailed = $DB->get_field_sql("
             SELECT count(*)
               FROM $from
-             WHERE $where AND quiza.sumgrades < :gradepass", $params);
+             WHERE $where AND (quiza.sumgrades * :qgrade / :qsumgrades) < :gradepass", $params);
             $row = array($namekey => get_string('failedattempts', 'quiz_randomsummary'),
                     'state' => $numfailed);
             $this->add_data_keyed($row);
 
+            $numfailed = 0;
+            $numpassed = 0;
+            foreach ($users as $user) {
+                $attempts = quiz_get_user_attempts($this->quiz->id, $user->userid, 'finished');
+                $attempt = null;
+                switch ($this->quiz->grademethod) {
+                    case QUIZ_ATTEMPTFIRST:
+                        $attempt = reset($attempts);
+                        break;
+                    case QUIZ_ATTEMPTLAST:
+                    case QUIZ_GRADEAVERAGE:
+                        $attempt = end($attempts);
+                        break;
+                    case QUIZ_GRADEHIGHEST:
+                        $maxmark = 0;
+                        foreach ($attempts as $at) {
+                            if ((float) $at->sumgrades >= $maxmark) {
+                                $maxmark = $at->sumgrades;
+                                $attempt = $at;
+                            }
+                        }
+                        break;
+                }
+                $grade = quiz_rescale_grade($attempt->sumgrades, $this->quiz, false);
+                if ($grade >= $params['gradepass']) {
+                    $numpassed++;
+                } else {
+                    $numfailed++;
+                }
+            }
             // Add passed users.
-            $numpassed = $DB->get_field_sql("
-            SELECT count(DISTINCT u.id)
-              FROM $from
-             WHERE $where AND quiza.sumgrades >= :gradepass", $params);
             $row = array($namekey => get_string('passedusers', 'quiz_randomsummary'),
                     'state' => $numpassed);
             $this->add_data_keyed($row);
 
             // Add failed users.
-            $numfailed = $DB->get_field_sql("
-            SELECT count(DISTINCT u.id)
-              FROM $from
-             WHERE $where AND quiza.sumgrades < :gradepass", $params);
             $row = array($namekey => get_string('failedusers', 'quiz_randomsummary'),
                     'state' => $numfailed);
             $this->add_data_keyed($row);
@@ -241,25 +305,26 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
      * @return array the (partial) row of data.
      */
     protected function format_average_grade_for_questions($gradeaverages) {
-        $row = array();
+        $row = [];
 
         if (!$gradeaverages) {
-            $gradeaverages = array();
+            $gradeaverages = [];
         }
 
-        foreach ($this->questions as $question) {
-            if (isset($gradeaverages[$question->slot]) && $question->maxmark > 0) {
-                $record = $gradeaverages[$question->slot];
+        foreach ($this->questions as $questionid => $question) {
+            if (isset($gradeaverages[$questionid]) && $question->maxmark > 0) {
+                $record = $gradeaverages[$questionid];
                 $record->grade = quiz_rescale_grade(
                         $record->averagefraction * $question->maxmark, $this->quiz, false);
 
             } else {
-                $record = new stdClass();
-                $record->grade = null;
-                $record->numaveraged = 0;
+                $record = (object) [
+                    'grade' => null,
+                    'numaveraged' => 0,
+                ];
             }
 
-            $row['qsgrade' . $question->slot] = $this->format_average($record, true);
+            $row['qsgrade' . $questionid] = $this->format_average($record, true);
         }
 
         return $row;
@@ -294,7 +359,7 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
 
     /**
      * Return the column with the sumgrades field.
-     * @param stdClass $attempt
+     * @param object $attempt
      * @return string
      */
     public function col_sumgrades($attempt) {
@@ -322,50 +387,59 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
      * @return string the contents of the cell.
      */
     public function other_cols($colname, $attempt) {
-        // If this is trying to display the student response to a question, pull it out.
-        if (preg_match('/^qsresponse(\d+)$/', $colname, $matches)) {
-            if (isset($this->lateststeps[$attempt->usageid][$matches[1]])) {
-                return $this->lateststeps[$attempt->usageid][$matches[1]]->responsesummary;
-            }
-            return '';
-        }
-
         // The only other column supported here is the grade, return null if for something else.
         if (!preg_match('/^qsgrade(\d+)$/', $colname, $matches)) {
             return null;
         }
 
-        $questionid = $matches[1];
+        $qid = $matches[1];
+        $usageidquestions = $this->lateststeps[$attempt->usageid];
 
-        $question = $this->questions[$questionid];
-        $slot = $question->slot;
-        // Check to see if this question was answered in any slot.
-        $foundquestion = false;
-        foreach ($this->lateststeps[$attempt->usageid] as $sl) {
-            if ($sl->questionid == $questionid) {
-                $slot = $sl->slot;
-                $foundquestion = true;
-            }
+        // Retrieving the question id in the question usage.
+        $question = array_filter($usageidquestions, function ($obj) use ($qid) {
+            return $obj->questionid == $qid;
+        });
 
+        if (empty($question)) {
+            return '-';
+        } else {
+            $question = array_shift($question);
         }
+        $slot = $question->slot;
+        $stepdata = $this->lateststeps[$attempt->usageid][$slot];
+        $state = question_state::get($stepdata->state);
 
-        if (!$foundquestion) {
-            return get_string('notanswered', 'quiz_randomsummary'); // This random question wasn't answer by this user.
+        if ($question->maxmark == 0) {
+            $grade = '-';
+        } else if (is_null($stepdata->fraction)) {
+            if ($state == question_state::$needsgrading) {
+                $grade = get_string('requiresgrading', 'question');
+            } else {
+                $grade = '-';
+            }
+        } else {
+            $grade = quiz_rescale_grade(
+                    $stepdata->fraction * $question->maxmark, $this->quiz, 'question');
         }
 
         if ($this->is_downloading()) {
-            $state = $this->slot_state($attempt, $slot);
-            if ($state->is_finished() && $state != question_state::$needsgrading) {
-                $fraction = $this->slot_fraction($attempt, $slot);
-                $feedbackclass = question_state::graded_state_for_fraction($fraction)->get_feedback_class();
-
-                return get_string($feedbackclass, 'question');
-            }
-            return '';
+            return $grade;
         }
 
-        // We don't pass the grade to review link as we are just displaying state.
-        return $this->make_review_link('', $attempt, $slot);
+        if (isset($this->regradedqs[$attempt->usageid][$slot])) {
+            $gradefromdb = $grade;
+            $newgrade = quiz_rescale_grade(
+                    $this->regradedqs[$attempt->usageid][$slot]->newfraction * $question->maxmark,
+                    $this->quiz, 'question');
+            $oldgrade = quiz_rescale_grade(
+                    $this->regradedqs[$attempt->usageid][$slot]->oldfraction * $question->maxmark,
+                    $this->quiz, 'question');
+
+            $grade = html_writer::tag('del', $oldgrade) . '/' .
+                    html_writer::empty_tag('br') . $newgrade;
+        }
+
+        return $this->make_review_link($grade, $attempt, $slot);
     }
 
     /**
@@ -400,46 +474,6 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
     }
 
     /**
-     * Only show the question status - not grade.
-     *
-     * @param string $data HTML fragment. The text to make into the link.
-     * @param object $attempt data for the row of the table being output.
-     * @param int $slot the number used to identify this question within this usage.
-     */
-    public function make_review_link($data, $attempt, $slot) {
-        global $OUTPUT;
-
-        $flag = '';
-        if ($this->is_flagged($attempt->usageid, $slot)) {
-            $flag = $OUTPUT->pix_icon('i/flagged', get_string('flagged', 'question'),
-                'moodle', array('class' => 'questionflag'));
-        }
-
-        $feedbackimg = '';
-        $state = $this->slot_state($attempt, $slot);
-        if ($state->is_finished() && $state != question_state::$needsgrading) {
-            $fraction = $this->slot_fraction($attempt, $slot);
-            $feedbackimg = $this->icon_for_fraction($fraction);
-            $feedbackclass = question_state::graded_state_for_fraction($fraction)->get_feedback_class();
-            $data = get_string($feedbackclass, 'question');
-        }
-
-        $output = html_writer::tag('span', $feedbackimg . html_writer::tag('span',
-                $data, array('class' => $state->get_state_class(true))) . $flag, array('class' => 'que'));
-
-        $reviewparams = array('attempt' => $attempt->attempt, 'slot' => $slot);
-        if (isset($attempt->try)) {
-            $reviewparams['step'] = $this->step_no_for_try($attempt->usageid, $slot, $attempt->try);
-        }
-        $url = new moodle_url('/mod/quiz/reviewquestion.php', $reviewparams);
-        $output = $OUTPUT->action_link($url, $output,
-            new popup_action('click', $url, 'reviewquestion',
-                array('height' => 450, 'width' => 650)),
-            array('title' => get_string('reviewresponse', 'quiz')));
-
-        return $output;
-    }
-    /**
      * Load information about the latest state of selected questions in selected attempts.
      * The questions array keys aren't the slot numbers so we need to get just the slots.
      *
@@ -455,28 +489,20 @@ class quiz_randomsummary_table extends quiz_attempts_report_table {
         }
         $dm = new question_engine_data_mapper();
         // Get Slot ids from $this->questions.
-        $slots = array();
+        $slots = [];
         foreach ($this->questions as $question) {
             $slots[] = $question->slot;
         }
 
-        // Check to see if we need to pull in any other slots/questions - used to display the student response to certain questions.
-        $responsecolumnconfig = get_config('quiz_randomsummary', 'showstudentresponse');
-        if (!empty($responsecolumnconfig)) {
-            $responsecolumns = explode(',', $responsecolumnconfig);
-            foreach ($responsecolumns as $rc) {
-                $slots[] = $rc;
-            }
-        }
         if (empty($slots)) {
             // No Random Questions found.
-            return array();
+            return [];
         }
 
         $latesstepdata = $dm->load_questions_usages_latest_steps(
-            $qubaids, array_keys($slots));
+            $qubaids, $slots);
 
-        $lateststeps = array();
+        $lateststeps = [];
         foreach ($latesstepdata as $step) {
             $lateststeps[$step->questionusageid][$step->slot] = $step;
         }
@@ -508,7 +534,7 @@ class quiz_randomsummary_question_engine_data_mapper extends question_engine_dat
      * $manuallygraded and $all.
      */
     public function load_questions_usages_question_state_summary(
-        qubaid_condition $qubaids, $slots) {
+        qubaid_condition $qubaids, $slots = null) {
 
         $rs = $this->db->get_recordset_sql("
           SELECT qa.questionid,
@@ -538,10 +564,11 @@ class quiz_randomsummary_question_engine_data_mapper extends question_engine_dat
         $results = array();
         foreach ($rs as $row) {
             if (!array_key_exists($row->questionid, $results)) {
-                $res = new stdClass();
-                $res->questionid = $row->questionid;
-                $res->name = $row->name;
-                $res->all = 0;
+                $res = (object) [
+                    'questionid' => $row->questionid,
+                    'name' => $row->name,
+                    'all' => 0,
+                ];
                 $results[$row->questionid] = $res;
             }
             $results[$row->questionid]->{$row->state} = $row->numstate;
@@ -551,5 +578,30 @@ class quiz_randomsummary_question_engine_data_mapper extends question_engine_dat
         $rs->close();
 
         return $results;
+    }
+
+    /**
+     * Load the average mark, and number of attempts, for each question.
+     *
+     * @param qubaid_condition $qubaids used to restrict which usages are included
+     * in the query.
+     * @return array of objects with fields ->questionid, ->averagefraction and ->numaveraged.
+     */
+    public function load_questions_average_marks(qubaid_condition $qubaids) {
+
+        return $this->db->get_records_sql("
+               SELECT   qa.questionid,
+                        AVG(COALESCE(qas.fraction, 0)) AS averagefraction,
+                        COUNT(1) AS numaveraged
+
+                FROM    {$qubaids->from_question_attempts('qa')}
+                JOIN    {question_attempt_steps} qas ON qas.questionattemptid = qa.id
+                        AND qas.sequencenumber = {$this->latest_step_for_qa_subquery()}
+
+               WHERE    {$qubaids->where()}
+
+            GROUP BY    qa.questionid
+
+            ORDER BY qa.questionid", $qubaids->from_where_params());
     }
 }
